@@ -9,6 +9,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(logicanalyzer_host
     main.c
+    serial.c
 )
 
 # Shares protocols.h with the firmware

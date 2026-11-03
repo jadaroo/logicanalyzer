@@ -13,10 +13,6 @@ set(CMAKE_CXX_STANDARD 17)
 
 pico_sdk_init()
 
-# FreeRTOS kernel: uses FREERTOS_KERNEL_PATH (cmake or env), otherwise defaults
-# to ../FreeRTOS-Kernel next to the pico-sdk. Must come after pico_sdk_init().
-include(FreeRTOS_Kernel_import.cmake)
-
 add_executable(${PROJECT_NAME}
     main.c
 )
@@ -29,13 +25,14 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 target_link_libraries(${PROJECT_NAME}
-    FreeRTOS-Kernel-Heap4
     pico_stdlib
     hardware_i2c
     hardware_adc
     hardware_dma
     hardware_irq
     hardware_pio
+    hardware_clocks
+    hardware_pll
 )
 
 pico_enable_stdio_usb(${PROJECT_NAME} 1)
