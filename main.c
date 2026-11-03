@@ -17,14 +17,17 @@
 #include <pico/time.h>
 #include <stdint.h>
 #include <stdio.h>
+#include "pico/stdio_usb.h"
 
 #define FIRST_CHANNEL 0
 #define BUFFER_SIZE 128
 
-uint32_t first_buffer[BUFFER_SIZE];
+uint32_t sample_buffer[BUFFER_SIZE];
 
 int main(void){
   stdio_init_all();
+
+  while(!stdio_usb_connected());
 
   i2c_init(i2c_default, 100*1000);
   gpio_set_function(PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C);
@@ -32,8 +35,11 @@ int main(void){
 
   gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
   gpio_pull_up(PICO_DEFAULT_I2C_SDA_PIN);
-  
+
   sleep_ms(3000);
+
+  // TODO: receive protocol / frequency / baudrate from the host program
+  // (init/main.c) over USB serial.
 
   PIO pio;
   uint sm;
@@ -58,7 +64,7 @@ int main(void){
 
   dma_channel_configure(FIRST_CHANNEL,
   &c,
-  first_buffer,
+  sample_buffer,
   &pio->rxf[sm],
   BUFFER_SIZE,
   false);
@@ -66,16 +72,16 @@ int main(void){
   uint8_t data[511];
   memset(&data[0], 0xFF, 511);
   dma_channel_start(FIRST_CHANNEL);
-  
+
   pio_sm_set_enabled(pio, sm, true);
   i2c_write_blocking(i2c_default, 0x7F, data, 511, false);
   dma_channel_wait_for_finish_blocking(FIRST_CHANNEL);
 
-  for(;;){    
+  for(;;){
     printf("SDA: ");
     for(uint8_t i = 0; i < 128; i++){
       for(uint8_t j = 0; j < 32; j += 2){
-        if(first_buffer[i] & (1u << j)){
+        if(sample_buffer[i] & (1u << j)){
           printf("%u", 1);
         } else{
           printf("%u", 0);
@@ -86,7 +92,7 @@ int main(void){
     printf("SCL: ");
     for(uint8_t i = 0; i < 128; i++){
       for(uint8_t j = 1; j < 32; j += 2){
-        if(first_buffer[i] & (1u << j)){
+        if(sample_buffer[i] & (1u << j)){
           printf("%u", 1);
         } else{
           printf("%u", 0);
