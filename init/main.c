@@ -1,142 +1,220 @@
-#include <stdlib.h>
+#include "protocols.h"
+#include <termios.h>
 #include <stdbool.h>
-#include <errno.h>
+#include <math.h>
+#include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
-#include "settings.h"
-#include "serial.h"
-
-#define DEFAULT_PORT "/dev/ttyACM0"
-#define LINE_MAX_LEN 8192
 
 protocol_t protocol;
 uint32_t frequency;
+uint32_t num_samples;
 uint8_t default_factor;
-uint32_t baudrate;
 
-/* Read a line from stdin; exits the program on EOF (e.g. Ctrl+D). */
-static void read_input(char *buf, int len){
-  if(!fgets(buf, len, stdin)){
-    printf("\nNo input, exiting.\n");
-    exit(1);
-  }
-}
+#define PROTOCOL_INPUT_SIZE 6
+#define FREQUENCY_INPUT_SIZE 10
+#define MIN_FREQ 1000
+#define SPI_MAX_FREQ 50000000
+#define I2C_MAX_FREQ 3400000
+#define UART_MAX_FREQ 12500000
+#define UART_MIN_FREQ 305
+#define MAX_SAMPLES 200000
+#define SAMPLES_INPUT_SIZE 8
 
-void choose_protocol(void){
+void choose_protocol(){
   while(true){
-    char protocol_text[10];
-    printf("Choose Protocol(I2C, UART, SPI):\n");
-    read_input(protocol_text, sizeof(protocol_text));
-    protocol_text[strcspn(protocol_text, "\r\n")] = '\0';
-    if(strcmp(protocol_text, "UART") == 0){
-      protocol = UART;
-      break;
-    } else if(strcmp(protocol_text, "I2C") == 0){
-      protocol = I2C;
-      break;
-    } else if(strcmp(protocol_text, "SPI") == 0){
+    char buffer[PROTOCOL_INPUT_SIZE];
+    printf("Enter the needed protocol(UART, I2C, SPI):\n");
+    if(!fgets(buffer, sizeof(buffer), stdin)){
+      printf("No protocol was read.\n");
+      exit(EXIT_FAILURE);
+    }
+
+    size_t end_of_input_idx = strcspn(buffer, "\n");
+    if(end_of_input_idx == sizeof(buffer) - 1){
+      printf("Invalid input, try again.\n");
+      while(getchar() != '\n');
+      continue;
+    }
+
+    buffer[end_of_input_idx] = '\0';
+    if(strcasecmp("SPI", buffer) == 0){
       protocol = SPI;
-      break;
+      default_factor = 4;
+    } else if(strcasecmp("I2C", buffer) == 0){
+      protocol = I2C;
+      default_factor = 10;
+    } else if(strcasecmp("UART", buffer) == 0){
+      protocol = UART;
+      default_factor = 10;
     } else{
-      printf("Incorrect protocol input. Try again.\n");
-    }
-  }
-}
-
-void choose_freq(void){
-  while(true){
-    char freq_text[12];
-    printf("Enter input signal frequency.\n");
-    printf("For SPI 1k - 50 MHz, for I2C 1k - 20 MHz\n");
-    read_input(freq_text, sizeof(freq_text));
-    char *end;
-    errno = 0;
-    long freq = strtol(freq_text, &end, 10);
-    if(end == &freq_text[0] || (*end != '\n' && *end != '\r' && *end != '\0') || errno == ERANGE){
-      printf("Incorrect frequency input. Try again.\n");
+      printf("Unknown protocol\n");
       continue;
     }
 
-    if(freq < 0 || !config_valid(protocol, (unsigned long)freq)){
-      if(protocol == SPI){
-        printf("Incorrect frequency input. Try again. The frequency for SPI should be between 1kHz and 50 MHz\n");
-      } else{
-        printf("Incorrect frequency input. Try again. The frequency for I2C should be between 1kHz and 20 MHz\n");
+    break;
+  }
+}
+
+void choose_freq(){
+  while(true){
+    if(protocol == SPI){
+      printf("Enter the signal frequency(1 k to 50 M), without Hz:\n");
+    } else if(protocol == I2C){
+      printf("Enter the signal frequency(1 k to 3.4 M), without Hz:\n");
+    } else{
+      printf("Enter the baudrate(200 to 12.5 Mbaud):, without Hz\n");
+    }
+
+    char buffer[FREQUENCY_INPUT_SIZE];
+    if(!fgets(buffer, sizeof(buffer), stdin)){
+      exit(EXIT_FAILURE);
+    }
+
+    size_t end_of_input_idx = strcspn(buffer, "\n");
+    if(end_of_input_idx == sizeof(buffer) - 1){
+      printf("Invalid input, try again.\n");
+      while(getchar() != '\n');
+      continue;
+    }
+
+    buffer[end_of_input_idx] = '\0';
+    char *end_ptr;
+    double frequency_temp = strtod(buffer, &end_ptr);
+    if(protocol == SPI){
+      if(!(frequency_temp >= MIN_FREQ && frequency_temp <= SPI_MAX_FREQ)){
+        printf("Too large frequency for SPI.\n");
+        continue;
       }
+    } else if(protocol == I2C){
+      if(!(frequency_temp >= MIN_FREQ && frequency_temp <= I2C_MAX_FREQ)){
+        printf("Too large frequency for I2C.\n");
+        continue;
+      }
+    } else{
+      if(!(frequency_temp >= UART_MIN_FREQ && frequency_temp <= UART_MAX_FREQ)){
+        printf("Too large baudrate for UART.\n");
+        continue;
+      }
+    }
+    
+    if(end_ptr == buffer){
+      printf("No number was read.\n");
+      continue;
+    }
+    while(isspace((unsigned char)*end_ptr)) end_ptr++;
+
+    uint32_t multiplier;
+    if(*end_ptr == '\0') multiplier = 1;
+    else if(*end_ptr == 'k' || *end_ptr == 'K'){
+      multiplier = (uint32_t)1000;
+      end_ptr++;
+    } 
+    else if(*end_ptr == 'M') {
+      multiplier = (uint32_t)1000000;
+      end_ptr++;
+    }
+    else{
+      printf("Wrong input, frequency should be only without multiplier or in kilo or mega Hz, like this: 1k, 5M\n");
       continue;
     }
 
-    frequency = (uint32_t)freq;
+    while(isspace((unsigned char)*end_ptr)) end_ptr++;
+    if(*(end_ptr + 1) != '\0'){
+      printf("Wrong input, frequency should be only without multiplier or in kilo or mega Hz, like this: 1k, 5M\n");
+      continue;
+    }
+    
+    frequency_temp *= multiplier;
+    frequency_temp = lround(frequency_temp);
+
+    frequency = frequency_temp;
+
     break;
   }
 }
 
-void choose_baud(void){
+void choose_num_of_samples(){
   while(true){
-    char baud_text[12];
-    printf("Enter UART baudrate (200 - 12.5 M):\n");
-    read_input(baud_text, sizeof(baud_text));
-    char *end;
-    errno = 0;
-    long baud = strtol(baud_text, &end, 10);
-    if(end == &baud_text[0] || (*end != '\n' && *end != '\r' && *end != '\0') || errno == ERANGE ||
-       baud < 0 || !config_valid(UART, (unsigned long)baud)){
-      printf("Incorrect baudrate input. Try again. UART baudrate should be between 200 and 12.5 M\n");
+    printf("Enter the number of needed samples(1-200000):\n");
+    char buffer[SAMPLES_INPUT_SIZE];
+    if(!fgets(buffer, sizeof(buffer), stdin)){
+      printf("No number was read.\n");
+      exit(EXIT_FAILURE);
+    }
+
+    size_t end_of_input_idx = strcspn(buffer, "\n");
+    if(end_of_input_idx == sizeof(buffer) - 1){
+      printf("Invalid input, try again.\n");
+      while(getchar() != '\n');
       continue;
     }
 
-    baudrate = (uint32_t)baud;
+    buffer[end_of_input_idx] = '\0';
+    
+    char *end_ptr;
+    long samples = strtol(buffer, &end_ptr, 10);
+    if(end_ptr == buffer){
+      printf("No number was read.\n");
+      continue;
+    }
+    while(isspace((unsigned char)*end_ptr)) end_ptr++;
+    
+    if(!(samples > 0 && samples < MAX_SAMPLES + 1)){
+      printf("Wrong input, number of samples should be only integer, from 1-200000\n");
+      continue;
+    }
+
+    if(*end_ptr != '\0'){
+      printf("Wrong input, number of samples should be only integer, from 1-200000\n");
+      continue;
+    }
+
+    num_samples = (uint32_t)samples;
+
     break;
   }
 }
 
-/* Host-side program: asks the user for the capture settings,
- * sends them to the Pico and prints the captured data. */
-int main(int argc, char **argv){
-  const char *port = argc > 1 ? argv[1] : DEFAULT_PORT;
+int main(void){
+    struct termios settings;
 
-  choose_protocol();
-
-  if(protocol == UART){
-    choose_baud();
-  } else{
-    choose_freq();
-  }
-
-  int fd = serial_open(port);
-  if(fd < 0) return 1;
-
-  unsigned long value = (protocol == UART) ? baudrate : frequency;
-  char cmd[CMD_MAX_LEN];
-  snprintf(cmd, sizeof(cmd), CMD_CONFIG " %d %lu\n", (int)protocol, value);
-  printf("Sending: %s", cmd);
-  if(serial_write_str(fd, cmd) != 0){
-    close(fd);
-    return 1;
-  }
-
-  static char line[LINE_MAX_LEN];
-  if(serial_read_line(fd, line, sizeof(line)) < 0){
-    close(fd);
-    return 1;
-  }
-  if(strcmp(line, RESP_OK) != 0){
-    fprintf(stderr, "Pico rejected the config: %s\n", line);
-    close(fd);
-    return 1;
-  }
-
-  // Print capture data until the Pico says it is done
-  while(serial_read_line(fd, line, sizeof(line)) >= 0){
-    if(strcmp(line, RESP_END) == 0){
-      close(fd);
-      return 0;
+    int pico = open("/dev/pico", O_RDWR | O_NOCTTY);
+    if(pico == -1){
+      perror("ERROR open /dev/pico\n");
+      exit(EXIT_FAILURE);
     }
-    printf("%s\n", line);
-  }
 
-  close(fd);
-  return 1;
+    if(tcgetattr(pico, &settings) == -1){
+      perror("ERROR open /dev/pico\n");
+      exit(EXIT_FAILURE);
+    }
+    cfmakeraw(&settings);
+    settings.c_cc[VMIN] = 0;
+    settings.c_cc[VTIME] = 10;
+    if(tcsetattr(pico, TCSANOW, &settings) == -1){
+      perror("ERROR open /dev/pico\n");
+      exit(EXIT_FAILURE);
+    }
+    if(tcflush(pico, TCIFLUSH) == -1){
+      perror("ERROR open /dev/pico\n");
+      exit(EXIT_FAILURE);
+    }
+    
+    choose_protocol();
+    choose_freq();
+    choose_num_of_samples();
+
+    char final_buffer[100];
+    int len = snprintf(final_buffer, sizeof(final_buffer), "FREQ %u", frequency * default_factor);
+    if(len == -1){
+      perror("Error in sending commands.\n");
+      exit(EXIT_FAILURE);
+    }
+    
+    ssize_t written = write(pico, final_buffer, len);
 }

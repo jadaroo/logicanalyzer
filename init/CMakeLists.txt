@@ -9,7 +9,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(logicanalyzer_host
     main.c
-    serial.c
 )
 
 # Shares protocols.h with the firmware
@@ -18,3 +17,6 @@ target_include_directories(logicanalyzer_host PRIVATE
 )
 
 target_compile_options(logicanalyzer_host PRIVATE -Wall -Wextra)
+
+# main.c uses lround() from math.h
+target_link_libraries(logicanalyzer_host PRIVATE m)
