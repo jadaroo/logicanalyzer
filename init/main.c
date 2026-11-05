@@ -37,7 +37,10 @@ void choose_protocol(){
     size_t end_of_input_idx = strcspn(buffer, "\n");
     if(end_of_input_idx == sizeof(buffer) - 1){
       printf("Invalid input, try again.\n");
-      while(getchar() != '\n');
+      int c = ' ';
+      while(c != '\n' || c != EOF){
+        c = getchar();
+      }
       continue;
     }
 
@@ -85,22 +88,6 @@ void choose_freq(){
     buffer[end_of_input_idx] = '\0';
     char *end_ptr;
     double frequency_temp = strtod(buffer, &end_ptr);
-    if(protocol == SPI){
-      if(!(frequency_temp >= MIN_FREQ && frequency_temp <= SPI_MAX_FREQ)){
-        printf("Too large frequency for SPI.\n");
-        continue;
-      }
-    } else if(protocol == I2C){
-      if(!(frequency_temp >= MIN_FREQ && frequency_temp <= I2C_MAX_FREQ)){
-        printf("Too large frequency for I2C.\n");
-        continue;
-      }
-    } else{
-      if(!(frequency_temp >= UART_MIN_FREQ && frequency_temp <= UART_MAX_FREQ)){
-        printf("Too large baudrate for UART.\n");
-        continue;
-      }
-    }
     
     if(end_ptr == buffer){
       printf("No number was read.\n");
@@ -124,13 +111,30 @@ void choose_freq(){
     }
 
     while(isspace((unsigned char)*end_ptr)) end_ptr++;
-    if(*(end_ptr + 1) != '\0'){
+    if(*end_ptr != '\0'){
       printf("Wrong input, frequency should be only without multiplier or in kilo or mega Hz, like this: 1k, 5M\n");
       continue;
     }
     
     frequency_temp *= multiplier;
     frequency_temp = lround(frequency_temp);
+
+    if(protocol == SPI){
+      if(!(frequency_temp >= MIN_FREQ && frequency_temp <= SPI_MAX_FREQ)){
+        printf("Too large frequency for SPI.\n");
+        continue;
+      }
+    } else if(protocol == I2C){
+      if(!(frequency_temp >= MIN_FREQ && frequency_temp <= I2C_MAX_FREQ)){
+        printf("Too large frequency for I2C.\n");
+        continue;
+      }
+    } else{
+      if(!(frequency_temp >= UART_MIN_FREQ && frequency_temp <= UART_MAX_FREQ)){
+        printf("Too large baudrate for UART.\n");
+        continue;
+      }
+    }
 
     frequency = frequency_temp;
 
@@ -209,12 +213,17 @@ int main(void){
     choose_freq();
     choose_num_of_samples();
 
+    printf("FREQ: %u, num of samples: %u\n", frequency, num_samples);
+    
     char final_buffer[100];
-    int len = snprintf(final_buffer, sizeof(final_buffer), "FREQ %u", frequency * default_factor);
+    int len = snprintf(final_buffer, sizeof(final_buffer), "FREQ %u SAMPLES %u\n", frequency * default_factor, num_samples);
     if(len == -1){
       perror("Error in sending commands.\n");
       exit(EXIT_FAILURE);
     }
     
     ssize_t written = write(pico, final_buffer, len);
+    if(written == -1){
+      perror("error\n");
+    }
 }

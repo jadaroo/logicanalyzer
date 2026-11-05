@@ -3,8 +3,10 @@
 #include "read_program.pio.h"
 #include <boards/pico.h>
 #include <boards/pico_w.h>
+#include <ctype.h>
 #include <hardware/regs/dreq.h>
 #include <hardware/structs/clocks.h>
+#include <pico/error.h>
 #include <stdbool.h>
 #include <string.h>
 #include <hardware/address_mapped.h>
@@ -22,25 +24,37 @@
 #include "pico/stdio_usb.h"
 #include "protocols.h"
 #include "hardware/clocks.h"
+#include <stdlib.h>
 
 #define FIRST_CHANNEL 0
 #define SAMPLES_PER_WORD 4
+#define MAX_SAMPLES 200000
 #define BUFFER_SIZE (MAX_SAMPLES / SAMPLES_PER_WORD)
 #define F_SYS 200000000
 
 uint32_t sample_buffer[BUFFER_SIZE];
-
 uint32_t sample_rate;
 uint32_t num_samples;
 
-/* Read one line from USB serial (without "\r\n"). Blocks until '\n'. */
-static void read_line(char *buf, size_t len){
-  
-}
+void wait_for_config(void){
+  char buffer[100];
+  uint8_t idx = 0;
+  for(;;){
+    int c = getchar_timeout_us(100000);
+    if(c == PICO_ERROR_TIMEOUT) continue;
+    buffer[idx++] = c;
+    if(c == '\n') break;
+  }
+  buffer[idx] = '\0';
 
-/* Wait for a valid "CFG <sample rate> <number of samples>" command from the host. */
-static void wait_for_config(void){
-  
+  idx = 0;
+  while(!isdigit(buffer[idx])) idx++;
+
+  char *end_ptr;
+  sample_rate = strtol(&buffer[idx], &end_ptr, 10);
+  end_ptr++;
+
+  num_samples = strtol(end_ptr + strlen("SAMPLES "), &end_ptr, 10);
 }
 
 static void print_channel(const char *name, uint first_bit){
@@ -56,16 +70,8 @@ static void print_channel(const char *name, uint first_bit){
 int main(void){
   vreg_set_voltage(VREG_VOLTAGE_1_15);
   set_sys_clock_hz(F_SYS, true);
-  
-  stdio_init_all();
-  while(!stdio_usb_connected());
-  
-  i2c_init(i2c_default, 100*1000);
-  gpio_set_function(PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C);
-  gpio_set_function(PICO_DEFAULT_I2C_SDA_PIN, GPIO_FUNC_I2C);
 
-  gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
-  gpio_pull_up(PICO_DEFAULT_I2C_SDA_PIN);
+  stdio_init_all();
 
   PIO pio;
   uint sm;
@@ -77,7 +83,7 @@ int main(void){
   for(uint8_t i = 16; i < 25; i++){
     gpio_disable_pulls(i);
   }
-  
+
   read_program_init(pio, sm, offset, 16);
 
   dma_channel_claim(FIRST_CHANNEL);
@@ -91,17 +97,16 @@ int main(void){
 
   for(;;){
     wait_for_config();
-    // Round up to whole words: the PIO only pushes full 32-bit words
-    uint32_t num_words = (num_samples + SAMPLES_PER_WORD - 1) / SAMPLES_PER_WORD;
 
+    uint32_t num_words = (num_samples + SAMPLES_PER_WORD - 1) / SAMPLES_PER_WORD;
     uint32_t clkdiv = F_SYS / sample_rate;
-    
+
     pio_sm_set_clkdiv(pio, sm, clkdiv);
     pio_sm_clkdiv_restart(pio, sm);
     pio_sm_clear_fifos(pio, sm);
     pio_sm_restart(pio, sm);
     pio_sm_set_enabled(pio, sm, true);
-    
+
     dma_channel_configure(FIRST_CHANNEL,
     &c,
     sample_buffer,
@@ -112,7 +117,5 @@ int main(void){
     dma_channel_wait_for_finish_blocking(FIRST_CHANNEL);
 
     pio_sm_set_enabled(pio, sm, false);
-    
-    printf(RESP_END "\n");
   }
 }
