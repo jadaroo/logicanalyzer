@@ -250,19 +250,26 @@ int main(void){
     time_t t = time(NULL);
     strftime(name, sizeof(name), "../../captures/capture_%Y%m%d_%H%M%S.txt", localtime(&t));
 
-    FILE *file = fopen(name, "wb");
+    uint8_t *ch0 = malloc(MAX_SAMPLES);
+    uint8_t *ch1 = malloc(MAX_SAMPLES);
+    uint8_t *ch2 = malloc(MAX_SAMPLES);
+    uint8_t *ch3 = malloc(MAX_SAMPLES);
+    uint8_t *ch4 = malloc(MAX_SAMPLES);
+    uint8_t *ch5 = malloc(MAX_SAMPLES);
+    uint8_t *ch6 = malloc(MAX_SAMPLES);
+    uint8_t *ch7 = malloc(MAX_SAMPLES);
+
+    uint8_t *channels[8] = {ch0, ch1, ch2, ch3, ch4, ch5, ch6, ch7};
+    
     for(uint32_t i = 0; i < NUM_OF_CHANNELS; i++){
       for(uint32_t j = 0; j < num_samples; j++){
         if(data[j] & (1u << i)){
-          fputc('1', file);
+          channels[i][j] = 1;
         } else{
-          fputc('0', file);
+          channels[i][j] = 0;
         }
       }
-      fputc('\n', file);
     }
-    
-    fclose(file);
-    
+        
     free(data);
 }
