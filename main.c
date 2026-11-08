@@ -21,8 +21,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "hardware/vreg.h"
-#include "pico/stdio_usb.h"
-#include "protocols.h"
 #include "hardware/clocks.h"
 #include <stdlib.h>
 
@@ -57,14 +55,13 @@ void wait_for_config(void){
   num_samples = strtol(end_ptr + strlen("SAMPLES "), &end_ptr, 10);
 }
 
-static void print_channel(const char *name, uint first_bit){
-  printf("%s: ", name);
-  for(uint i = 0; i < BUFFER_SIZE; i++){
-    for(uint j = first_bit; j < 32; j += 2){
-      putchar((sample_buffer[i] & (1u << j)) ? '1' : '0');
-    }
+void send_data(void){
+  uint8_t *bytes = (uint8_t *)sample_buffer;
+  for(uint32_t i = 0; i < num_samples; i++){
+    putchar_raw(bytes[i]);
   }
-  printf("\n");
+
+  stdio_flush();
 }
 
 int main(void){
@@ -73,6 +70,12 @@ int main(void){
 
   stdio_init_all();
 
+  i2c_init(i2c_default, 400 * 1000);
+  gpio_set_function(PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C);
+  gpio_set_function(PICO_DEFAULT_I2C_SDA_PIN, GPIO_FUNC_I2C);
+  gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
+  gpio_pull_up(PICO_DEFAULT_I2C_SDA_PIN);
+  
   PIO pio;
   uint sm;
   uint offset;
@@ -114,8 +117,15 @@ int main(void){
     num_words,
     true);
 
+    uint8_t data[1000];
+    memset(data, 0xFF, sizeof(data));
+    
+    i2c_write_blocking(i2c_default, 0x7F, data, sizeof(data), false);
+    
     dma_channel_wait_for_finish_blocking(FIRST_CHANNEL);
 
+    send_data();
+    
     pio_sm_set_enabled(pio, sm, false);
   }
 }

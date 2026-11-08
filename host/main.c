@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 
 protocol_t protocol;
 uint32_t frequency;
@@ -24,6 +25,7 @@ uint8_t default_factor;
 #define UART_MIN_FREQ 305
 #define MAX_SAMPLES 200000
 #define SAMPLES_INPUT_SIZE 8
+#define NUM_OF_CHANNELS 8
 
 void choose_protocol(){
   while(true){
@@ -38,7 +40,7 @@ void choose_protocol(){
     if(end_of_input_idx == sizeof(buffer) - 1){
       printf("Invalid input, try again.\n");
       int c = ' ';
-      while(c != '\n' || c != EOF){
+      while(c != '\n' && c != EOF){
         c = getchar();
       }
       continue;
@@ -121,17 +123,17 @@ void choose_freq(){
 
     if(protocol == SPI){
       if(!(frequency_temp >= MIN_FREQ && frequency_temp <= SPI_MAX_FREQ)){
-        printf("Too large frequency for SPI.\n");
+        printf("Too large or small frequency for SPI.\n");
         continue;
       }
     } else if(protocol == I2C){
       if(!(frequency_temp >= MIN_FREQ && frequency_temp <= I2C_MAX_FREQ)){
-        printf("Too large frequency for I2C.\n");
+        printf("Too large or small frequency for I2C.\n");
         continue;
       }
     } else{
       if(!(frequency_temp >= UART_MIN_FREQ && frequency_temp <= UART_MAX_FREQ)){
-        printf("Too large baudrate for UART.\n");
+        printf("Too large or small baudrate for UART.\n");
         continue;
       }
     }
@@ -224,6 +226,43 @@ int main(void){
     
     ssize_t written = write(pico, final_buffer, len);
     if(written == -1){
-      perror("error\n");
+      perror("Writing error\n");
+      exit(EXIT_FAILURE);
     }
+
+    uint8_t *data = malloc(num_samples);
+    if(!data) exit(EXIT_FAILURE);
+
+    uint32_t received = 0;
+    while(received < num_samples){
+      ssize_t r = read(pico, data + received, num_samples - received);
+      if(r == -1){
+        perror("Reading error\n");
+        exit(EXIT_FAILURE);
+      } else if(r == 0){
+        continue;
+      }
+
+      received += r;
+    }
+
+    char name[100];
+    time_t t = time(NULL);
+    strftime(name, sizeof(name), "../../captures/capture_%Y%m%d_%H%M%S.txt", localtime(&t));
+
+    FILE *file = fopen(name, "wb");
+    for(uint32_t i = 0; i < NUM_OF_CHANNELS; i++){
+      for(uint32_t j = 0; j < num_samples; j++){
+        if(data[j] & (1u << i)){
+          fputc('1', file);
+        } else{
+          fputc('0', file);
+        }
+      }
+      fputc('\n', file);
+    }
+    
+    fclose(file);
+    
+    free(data);
 }
