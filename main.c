@@ -19,7 +19,6 @@
 #include <pico/stdio.h>
 #include <pico/time.h>
 #include <stdint.h>
-#include <stdio.h>
 #include "hardware/vreg.h"
 #include "hardware/clocks.h"
 #include <stdlib.h>
@@ -117,7 +116,7 @@ int main(void){
     num_words,
     true);
 
-    uint8_t data[1000];
+    uint8_t data[10];
     memset(data, 0xFF, sizeof(data));
     
     i2c_write_blocking(i2c_default, 0x7F, data, sizeof(data), false);

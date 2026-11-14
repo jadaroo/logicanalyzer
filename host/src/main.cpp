@@ -1,3 +1,5 @@
+#include "events.hpp"
+#include "i2c_decoder.hpp"
 #include "protocols.h"
 #include <cstddef>
 #include <cstdlib>
@@ -15,19 +17,12 @@
 #include <unistd.h>
 #include <time.h>
 #include <vector>
+#include <iostream>
 
 protocol_t protocol;
 uint32_t frequency;
 uint32_t num_samples;
 uint8_t default_factor;
-std::string ch0_name;
-std::string ch1_name;
-std::string ch2_name;
-std::string ch3_name;
-std::string ch4_name;
-std::string ch5_name;
-std::string ch6_name;
-std::string ch7_name;
 
 #define PROTOCOL_INPUT_SIZE 6
 #define FREQUENCY_INPUT_SIZE 10
@@ -230,7 +225,7 @@ void convert_to_vcd(std::vector<uint8_t> &data){
   
   uint8_t sample;
   for(size_t i = 1; i < num_samples; i++){
-    uint64_t timestamp = i * 1000000000 / (frequency * default_factor);
+    uint64_t timestamp = static_cast<long long>(i) * static_cast<long long>(1000000000) / (frequency * default_factor);
     sample = data[i];
     if(prev_sample != sample){
       out << '#' << timestamp << '\n';
@@ -312,16 +307,7 @@ int main(void){
 
     convert_to_vcd(data);
     
-    std::vector<uint8_t> ch0;
-    std::vector<uint8_t> ch1;
-    std::vector<uint8_t> ch2;
-    std::vector<uint8_t> ch3;
-    std::vector<uint8_t> ch4;
-    std::vector<uint8_t> ch5;
-    std::vector<uint8_t> ch6;
-    std::vector<uint8_t> ch7;
-
-    std::vector<std::vector<uint8_t>> channels = {ch0, ch1, ch2, ch3, ch4, ch5, ch6, ch7};
+    std::vector<std::vector<uint8_t>> channels(8);
     
     for(uint32_t i = 0; i < NUM_OF_CHANNELS; i++){
       for(uint32_t j = 0; j < num_samples; j++){
@@ -332,4 +318,38 @@ int main(void){
         }
       }
     }
+
+    const std::vector<uint8_t> t3_scl = {
+      1,1,1,  // idle
+      1,1,  // START
+      0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,  // byte 0x78 (addr 0x3C + W)
+      0,0,1,1,  // ACK
+      0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,  // byte 0x10
+      0,0,1,1,  // ACK
+      0,0,1,1,1,1,  // repeated START
+      0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,  // byte 0x79 (addr 0x3C + R)
+      0,0,1,1,  // ACK
+      0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,  // byte 0x5A
+      0,0,1,1,  // NACK
+      0,0,1,1,1,1,1,  // STOP
+    };
+    const std::vector<uint8_t> t3_sda = {
+      1,1,1,  // idle
+      0,0,  // START
+      0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,  // byte 0x78 (addr 0x3C + W)
+      0,0,0,0,  // ACK
+      0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  // byte 0x10
+      0,0,0,0,  // ACK
+      0,1,1,1,0,0,  // repeated START
+      0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,  // byte 0x79 (addr 0x3C + R)
+      1,0,0,0,  // ACK
+      0,0,0,0,0,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,0,0,0,  // byte 0x5A
+      0,1,1,1,  // NACK
+      1,0,0,0,1,1,1,  // STOP
+    };
+    // expected: START, ADDRESS 0x3C, WRITE, ACK, DATA 0x10, ACK, START, ADDRESS 0x3C, READ, ACK, DATA 0x5A, NACK, STOP
+    
+    std::vector<event_t> i2c_events = decode(t3_scl, t3_sda, t3_scl.size());
+    
+    print_events(i2c_events, frequency * default_factor);
 }
