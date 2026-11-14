@@ -1,4 +1,8 @@
 #include "protocols.h"
+#include <cstddef>
+#include <cstdlib>
+#include <fstream>
+#include <string>
 #include <termios.h>
 #include <stdbool.h>
 #include <math.h>
@@ -10,11 +14,20 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
+#include <vector>
 
 protocol_t protocol;
 uint32_t frequency;
 uint32_t num_samples;
 uint8_t default_factor;
+std::string ch0_name;
+std::string ch1_name;
+std::string ch2_name;
+std::string ch3_name;
+std::string ch4_name;
+std::string ch5_name;
+std::string ch6_name;
+std::string ch7_name;
 
 #define PROTOCOL_INPUT_SIZE 6
 #define FREQUENCY_INPUT_SIZE 10
@@ -186,6 +199,58 @@ void choose_num_of_samples(){
   }
 }
 
+void convert_to_vcd(std::vector<uint8_t> &data){
+  char name[100];
+  time_t t = time(NULL);
+  strftime(name, sizeof(name), "../../captures/capture_%Y%m%d_%H%M%S.vcd", localtime(&t));
+
+  FILE *vcd = fopen(name, "wb");
+  std::ofstream out(name);
+
+  out << "$timescale 1 ns $end\n" << "$scope module logic $end\n";
+
+  char channels[8];
+  
+  for(uint8_t i = 0; i < 8; i++){
+    channels[i] = 'a' + i;
+    out << "$var wire 1 " << static_cast<char>('a' + i) << " D" << static_cast<char>('0' + i) << " $end\n";  
+  }
+  out << "$upscope $end\n" << "$enddefinitions $end\n" << "#0\n" << "$dumpvars\n";
+
+  uint8_t prev_sample = data[0];
+
+  for(uint8_t i = 0; i < 8; i++){
+    if(prev_sample & (1u << i)){
+      out << '1' << channels[i] << '\n';
+    } else{
+      out << '0' << channels[i] << '\n';
+    }
+  }
+  out << "$end\n";
+  
+  uint8_t sample;
+  for(size_t i = 1; i < num_samples; i++){
+    uint64_t timestamp = i * 1000000000 / (frequency * default_factor);
+    sample = data[i];
+    if(prev_sample != sample){
+      out << '#' << timestamp << '\n';
+      for(uint8_t i = 0; i < 8; i++){
+       if(sample & (1u << i)){
+         out << '1' << channels[i] << '\n';
+       } else{
+         out << '0' << channels[i] << '\n';
+       }
+      }
+    }
+
+    prev_sample = sample;
+  }
+
+  uint64_t closing_timestamp = static_cast<long long>(1000) * static_cast<long long>(1000000000) / (frequency * default_factor);
+  out << '#' << closing_timestamp << '\n';
+  fclose(vcd);
+}
+
 int main(void){
     struct termios settings;
 
@@ -230,12 +295,11 @@ int main(void){
       exit(EXIT_FAILURE);
     }
 
-    uint8_t *data = malloc(num_samples);
-    if(!data) exit(EXIT_FAILURE);
+    std::vector<uint8_t> data(num_samples);
 
     uint32_t received = 0;
     while(received < num_samples){
-      ssize_t r = read(pico, data + received, num_samples - received);
+      ssize_t r = read(pico, data.data() + received, num_samples - received);
       if(r == -1){
         perror("Reading error\n");
         exit(EXIT_FAILURE);
@@ -246,30 +310,26 @@ int main(void){
       received += r;
     }
 
-    char name[100];
-    time_t t = time(NULL);
-    strftime(name, sizeof(name), "../../captures/capture_%Y%m%d_%H%M%S.txt", localtime(&t));
+    convert_to_vcd(data);
+    
+    std::vector<uint8_t> ch0;
+    std::vector<uint8_t> ch1;
+    std::vector<uint8_t> ch2;
+    std::vector<uint8_t> ch3;
+    std::vector<uint8_t> ch4;
+    std::vector<uint8_t> ch5;
+    std::vector<uint8_t> ch6;
+    std::vector<uint8_t> ch7;
 
-    uint8_t *ch0 = malloc(MAX_SAMPLES);
-    uint8_t *ch1 = malloc(MAX_SAMPLES);
-    uint8_t *ch2 = malloc(MAX_SAMPLES);
-    uint8_t *ch3 = malloc(MAX_SAMPLES);
-    uint8_t *ch4 = malloc(MAX_SAMPLES);
-    uint8_t *ch5 = malloc(MAX_SAMPLES);
-    uint8_t *ch6 = malloc(MAX_SAMPLES);
-    uint8_t *ch7 = malloc(MAX_SAMPLES);
-
-    uint8_t *channels[8] = {ch0, ch1, ch2, ch3, ch4, ch5, ch6, ch7};
+    std::vector<std::vector<uint8_t>> channels = {ch0, ch1, ch2, ch3, ch4, ch5, ch6, ch7};
     
     for(uint32_t i = 0; i < NUM_OF_CHANNELS; i++){
       for(uint32_t j = 0; j < num_samples; j++){
         if(data[j] & (1u << i)){
-          channels[i][j] = 1;
+          channels[i].push_back(1);
         } else{
-          channels[i][j] = 0;
+          channels[i].push_back(0);
         }
       }
     }
-        
-    free(data);
 }

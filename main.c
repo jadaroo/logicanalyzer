@@ -80,14 +80,14 @@ int main(void){
   uint sm;
   uint offset;
 
-  bool success = pio_claim_free_sm_and_add_program_for_gpio_range(&read_program, &pio, &sm, &offset, 16, 8, true);
+  bool success = pio_claim_free_sm_and_add_program_for_gpio_range(&read_program, &pio, &sm, &offset, 7, 8, true);
   hard_assert(success);
 
-  for(uint8_t i = 16; i < 25; i++){
+  for(uint8_t i = 7; i < 16; i++){
     gpio_disable_pulls(i);
   }
 
-  read_program_init(pio, sm, offset, 16);
+  read_program_init(pio, sm, offset, 7);
 
   dma_channel_claim(FIRST_CHANNEL);
 

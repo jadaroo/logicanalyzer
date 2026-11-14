@@ -3,19 +3,23 @@
 #   cmake -S . -B build && cmake --build build
 cmake_minimum_required(VERSION 3.13)
 
-project(logicanalyzer_host C)
+project(logicanalyzer_host C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)   # -g, so gdb can show source lines
 endif()
 
-# Every .c file under src/ (including subfolders like src/i2c/) is compiled.
+# Every .c and .cpp file under src/ (including subfolders like src/i2c/) is compiled.
 # CONFIGURE_DEPENDS makes CMake re-scan when you add or remove a file.
 file(GLOB_RECURSE HOST_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_LIST_DIR}/src/*.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp
 )
 
 add_executable(logicanalyzer_host ${HOST_SOURCES})
