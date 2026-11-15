@@ -5,6 +5,9 @@
 #include <cmath>
 #include <ctime>
 #include <fstream>
+#include <ios>
+#include <iostream>
+#include <limits>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +21,19 @@ struct config_t {
   uint32_t frequency;
   uint32_t num_samples;
   uint8_t default_factor;
+};
+
+enum spi_mode_t : uint8_t {
+  MODE_0 = 0,
+  MODE_1 = 1,
+  MODE_2 = 2,
+  MODE_3 = 3
+};
+
+struct spi_config_t {
+  spi_mode_t mode;
+  uint32_t msb;
+  uint32_t word_size;
 };
 
 #define PROTOCOL_INPUT_SIZE 6
@@ -65,6 +81,99 @@ inline void choose_protocol(config_t &main_config){
       continue;
     }
 
+    break;
+  }
+}
+
+inline void set_up_spi(spi_config_t &config){
+  uint32_t main_cpol;
+  uint32_t main_cpha;
+  while(true){
+    std::cout << "Enter SPI CPOL(0 or 1) value:\n";
+    uint32_t cpol;
+    if(!(std::cin >> cpol)){
+      std::cout << "Invalid input\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      continue;
+    }
+
+    if(!(cpol == 0 || cpol == 1)){
+      std::cout << "CPOL value should be 0 or 1.\n";
+      continue;
+    }
+
+    main_cpol = cpol;
+    break;
+  }
+
+  while(true){
+    std::cout << "Enter SPI CPHA(0 or 1) value:\n";
+    uint32_t cpha;
+    if(!(std::cin >> cpha)){
+      std::cout << "Invalid input.\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      continue;
+    }
+
+    if(!(cpha == 0 || cpha == 1)){
+      std::cout << "CPHA value should be 1 or 0\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      continue;
+    }
+
+    main_cpha = cpha;
+    break;
+  }
+
+  if(!main_cpol && !main_cpha) config.mode = MODE_0;
+  if(!main_cpol && main_cpha) config.mode = MODE_1;
+  if(main_cpol && !main_cpha) config.mode = MODE_2;
+  if(main_cpol && main_cpha) config.mode = MODE_3;
+  
+  while(true){
+    std::cout << "Enter SPI MSB(1) or LSB(0)\n";
+
+    uint32_t msb;
+    if(!(std::cin >> msb)){
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      std::cout << "Invalid input.\n";
+      continue;
+    }
+
+    if(!(msb == 0 || msb == 1)){
+      std::cout << "Please enter 1 for MSB and 0 for LSB\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      continue;
+    }
+
+    config.msb = msb;
+    break;
+  }
+
+  while(true){
+    std::cout << "Enter SPI word size, 4 to 32 bits\n";
+
+    uint32_t word_size;
+    if(!(std::cin >> word_size)){
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      std::cout << "Invalid input.\n";
+      continue;
+    }
+
+    if(!(word_size >= 4 && word_size <= 32)){
+      std::cout << "Please enter size between 4 and 32\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      continue;
+    }
+
+    config.word_size = word_size;
     break;
   }
 }
@@ -190,7 +299,7 @@ inline void choose_num_of_samples(config_t &main_config){
   }
 }
 
-void convert_to_vcd(std::vector<uint8_t> &data, config_t &main_config){
+inline void convert_to_vcd(std::vector<uint8_t> &data, config_t &main_config){
   char name[100];
   time_t t = time(NULL);
   strftime(name, sizeof(name), "../../captures/capture_%Y%m%d_%H%M%S.vcd", localtime(&t));

@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <vector>
 
-std::vector<event_t> decode(const std::vector<uint8_t> &scl, const std::vector<uint8_t> &sda, uint32_t samples){
+std::vector<event_t> i2c_decode(const std::vector<uint8_t> &scl, const std::vector<uint8_t> &sda, uint32_t samples){
   std::vector<event_t> events;
 
   decoding_state state = decoding_state::IDLE;
@@ -94,6 +94,11 @@ std::vector<event_t> decode(const std::vector<uint8_t> &scl, const std::vector<u
           }
         }
     }
+  }
+
+  if(events.empty()){
+    std::cout << "No data was captured.\n";
+    return{};
   }
   
   return events;

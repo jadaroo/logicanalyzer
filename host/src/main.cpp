@@ -2,10 +2,8 @@
 #include "i2c_decoder.hpp"
 #include "main_config.hpp"
 #include "protocols.h"
-#include <cstddef>
+#include "spi_decoder.hpp"
 #include <cstdlib>
-#include <fstream>
-#include <string>
 #include <termios.h>
 #include <stdbool.h>
 #include <math.h>
@@ -17,6 +15,7 @@
 #include <vector>
 
 config_t main_config;
+spi_config_t spi_config;
 
 int main(void){
     struct termios settings;
@@ -30,6 +29,10 @@ int main(void){
     choose_protocol(main_config);
     choose_freq(main_config);
     choose_num_of_samples(main_config);
+
+    if(main_config.protocol == SPI){
+      set_up_spi(spi_config);
+    }
 
     send_config_to_pico(pico, main_config, settings);
 
@@ -62,7 +65,24 @@ int main(void){
       }
     }
 
-    std::vector<event_t> i2c_events = decode(channels[0], channels[1], channels[0].size());
+    std::vector<event_t> i2c_events = i2c_decode(channels[0], channels[1], channels[0].size());
+    std::vector<event_t> spi_miso;
+    std::vector<event_t> spi_mosi;
+
+    const std::vector<uint8_t> cs   = {1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1};
+    const std::vector<uint8_t> sck  = {1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1};
+    const std::vector<uint8_t> mosi = {0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0};
+    const std::vector<uint8_t> miso = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0};
     
-    print_events(i2c_events, main_config.frequency * main_config.default_factor);
+    spi_decode(cs, sck, mosi, miso, spi_config, sck.size(), spi_mosi, spi_miso, main_config);
+
+    if(main_config.protocol == SPI){
+      std::cout << "MOSI DATA:\n";
+      print_events(spi_mosi, main_config.frequency * main_config.default_factor);
+      std::cout << "MISO DATA:\n";
+      print_events(spi_miso, main_config.frequency * main_config.default_factor);
+    } else if(main_config.protocol == I2C){
+      std::cout << "I2C DATA:\n";
+      print_events(i2c_events, main_config.frequency * main_config.default_factor);
+    } 
 }

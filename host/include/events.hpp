@@ -1,5 +1,6 @@
 #pragma once
 
+#include "main_config.hpp"
 #include <event2/event_struct.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -33,6 +34,8 @@ struct event_t {
 };
 
 inline void print_events(std::vector<event_t> &events, uint64_t sample_rate){
+  if(events.empty()) return;
+  
   std::vector<std::string> event_names;
   std::vector<std::string> values;
   std::vector<std::string> timestamps;
@@ -81,3 +84,7 @@ inline void print_events(std::vector<event_t> &events, uint64_t sample_rate){
 
   std::cout << '\n';
 }
+
+inline long long calculate_timestamp(uint32_t i, config_t &config){
+  return static_cast<long long>(i) * static_cast<long long>(1000000000) / (config.frequency * config.default_factor);
+} 
