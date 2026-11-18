@@ -16,7 +16,8 @@ enum event_name_t : uint8_t{
   ADDRESS = 4,
   DATA = 5,
   READ = 6,
-  WRITE = 7
+  WRITE = 7,
+  PARITY = 8
 };
 
 struct event_t {
@@ -46,9 +47,11 @@ inline void print_events(std::vector<event_t> &events, uint64_t sample_rate){
       event_names.push_back(" |   ACK  |");
     } else if(event.name == NACK){
       event_names.push_back(" |   NACK |");
+    } else if(event.name == PARITY){
+      event_names.push_back(" |   PARITY |");
     } else{
       event_names.push_back(" |   STOP |");
-    }
+    } 
 
     std::string buffer_value(100, '\0');
     snprintf(buffer_value.data(), buffer_value.size(), " |  0x%02X  |", static_cast<unsigned>(event.value));

@@ -16,7 +16,9 @@ enum class decoding_state{
   IDLE,
   ADDRESS_READ,
   DATA_READ,
-  ACK
+  ACK,
+  PARITY,
+  STOP
 };
 
 struct i2c_pins_t {
@@ -46,7 +48,6 @@ struct uart_config_t {
   uint8_t stop_bits;
   uint8_t msb;
   uint8_t polarity;
-  uint32_t baudrate;
 };
 
 enum spi_mode_t : uint8_t {

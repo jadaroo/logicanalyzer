@@ -4,6 +4,7 @@
 #include "main_config.hpp"
 #include "protocols.h"
 #include "spi_decoder.hpp"
+#include "uart_decoder.hpp"
 #include <cstdlib>
 #include <iostream>
 #include <stdint.h>
@@ -46,7 +47,7 @@ int main(void){
         }
       }
     }
-
+    
     for(const decoder_config_t &decoder : decoders){
       if(decoder.protocol == SPI){
         const spi_pins_t &pins = decoder.spi_pins;
@@ -63,7 +64,9 @@ int main(void){
         std::cout << "I2C DATA:\n";
         print_events(i2c_events, capture.sample_rate);
       } else if(decoder.protocol == UART){
-        std::cout << "UART decoder is not implemented yet.\n";
+        std::vector<event_t> uart_events = uart_decode(channels[decoder.uart_pins.rx], decoder.uart_config, capture);
+        std::cout << "UART DATA:\n";
+        print_events(uart_events, capture.sample_rate);
       }
     }
 }

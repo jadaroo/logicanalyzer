@@ -19,6 +19,7 @@ void set_up_pins(decoder_config_t &config, pins_t &pins);
 void create_decoders(std::vector<decoder_config_t> &decoders);
 
 void set_up_spi(spi_config_t &config);
+void set_up_uart(uart_config_t &config);
 void choose_freq(decoder_config_t &main_config);
 void choose_num_of_samples(capture_config_t &capture);
 

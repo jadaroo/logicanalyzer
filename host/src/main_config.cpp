@@ -1,4 +1,6 @@
 #include "main_config.hpp"
+#include "decoder.hpp"
+#include "protocols.h"
 #include <cctype>
 #include <cmath>
 #include <fcntl.h>
@@ -6,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -157,6 +160,8 @@ void create_decoders(std::vector<decoder_config_t> &decoders){
     choose_freq(decoder);
     if(decoder.protocol == SPI){
       set_up_spi(decoder.spi_config);
+    } else if(decoder.protocol == UART){
+      set_up_uart(decoder.uart_config);
     }
     decoders.push_back(decoder);
   }
@@ -256,6 +261,112 @@ void set_up_spi(spi_config_t &config){
   }
 }
 
+void set_up_uart(uart_config_t &config){
+  while(true){
+    std::cout << "Enter UART databits number:\n";
+    uint32_t databits;
+    if(!(std::cin >> databits)){
+      std::cout << "Invalid input\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      continue;
+    }
+
+    if(!(databits >= 5 && databits <= 9)){
+      std::cout << "Supported size of uart databits are 5 to 9.\n";
+      continue;
+    }
+
+    config.data_bits = databits;
+    break;
+  }
+  
+  while(true){
+    std::cout << "Enter UART parity(0 - NONE, 1 - ODD, 2 - EVEN, 3 - MARK, 4 - SPACE):\n";
+    int input;
+    if(!(std::cin >> input)){
+      std::cout << "Invalid input.\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      continue;
+    }
+
+    if(!(input >= 0 && input <= 4)){
+      std::cout << "Please enter 0 - NONE, 1 - ODD, 2 - EVEN, 3 - MARK, 4 - SPACE.\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      continue;
+    }
+
+    config.parity = static_cast<parity_t>(input);
+    break;
+  }
+  
+  while(true){
+    std::cout << "Enter the number of STOP bits, 1 or 2:\n";
+    int input;
+    if(!(std::cin >> input)){
+      std::cout << "Invalid input.\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      continue;
+    }
+
+    if(!(input == 1 || input == 2)){
+      std::cout << "Please enter 1 or 2.\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      continue;
+    }
+
+    config.stop_bits = static_cast<uint8_t>(input);
+    break;
+  }
+
+  while(true){
+    std::cout << "Enter the MSB or LSB first, 1(MSB) or 0(LSB):\n";
+    int input;
+    if(!(std::cin >> input)){
+      std::cout << "Invalid input.\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      continue;
+    }
+
+    if(!(input == 1 || input == 0)){
+      std::cout << "Please enter 1 or 0.\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      continue;
+    }
+
+    config.msb = static_cast<uint8_t>(input);
+    break;
+  }
+
+  while(true){
+    std::cout << "Enter polarity, 1(high) or 0(low):\n";
+    int input;
+    if(!(std::cin >> input)){
+      std::cout << "Invalid input.\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      continue;
+    }
+
+    if(!(input == 1 || input == 0)){
+      std::cout << "Please enter 1 or 0.\n";
+      std::cin.clear();
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      continue;
+    }
+
+    config.polarity = static_cast<uint8_t>(input);
+    break;
+  }
+}
+
+
 void choose_freq(decoder_config_t &main_config){
   while(true){
     if(main_config.protocol == SPI){
@@ -263,7 +374,7 @@ void choose_freq(decoder_config_t &main_config){
     } else if(main_config.protocol == I2C){
       printf("Enter the signal frequency(1 k to 3.4 M), without Hz:\n");
     } else{
-      printf("Enter the baudrate(200 to 12.5 Mbaud):, without Hz\n");
+      printf("Enter the baudrate(200 to 12.5 Mbaud):, without baud\n");
     }
 
     char buffer[FREQUENCY_INPUT_SIZE];
