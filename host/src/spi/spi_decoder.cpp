@@ -1,4 +1,5 @@
 #include "spi_decoder.hpp"
+#include "decoder/decoder.hpp"
 #include "events.hpp"
 #include "main_config.hpp"
 #include <cstdint>
@@ -9,7 +10,7 @@ void spi_decode(const std::vector<uint8_t> &cs, const std::vector<uint8_t> &scl,
               const std::vector<uint8_t> &mosi, const std::vector<uint8_t> &miso, 
               const spi_config_t &config, uint32_t samples,
               std::vector<event_t> &mosi_events, std::vector<event_t> &miso_events, 
-              config_t &main_config){
+              const capture_config_t &capture){
           
   uint32_t mosi_word = 0;
   uint32_t mosi_idx = config.word_size - 1;
@@ -61,7 +62,7 @@ void spi_decode(const std::vector<uint8_t> &cs, const std::vector<uint8_t> &scl,
       } 
       
       if((miso_word != 0 && miso_idx != config.word_size - 1) || (mosi_word != 0 && miso_idx != config.word_size - 1)){
-        std::cout << "No complete word on timestamp " << calculate_timestamp(i, main_config) << ", only " << config.word_size - 1 - miso_idx << " bits captured.\n"; 
+        std::cout << "No complete word on timestamp " << calculate_timestamp(i, capture) << ", only " << config.word_size - 1 - miso_idx << " bits captured.\n"; 
       }
     }
   } 

@@ -1,7 +1,6 @@
 #pragma once
 
-#include "main_config.hpp"
-#include <event2/event_struct.h>
+#include "decoder/decoder.hpp"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,13 +17,6 @@ enum event_name_t : uint8_t{
   DATA = 5,
   READ = 6,
   WRITE = 7
-};
-
-enum class decoding_state{
-  IDLE,
-  ADDRESS_READ,
-  DATA_READ,
-  ACK
 };
 
 struct event_t {
@@ -85,6 +77,6 @@ inline void print_events(std::vector<event_t> &events, uint64_t sample_rate){
   std::cout << '\n';
 }
 
-inline long long calculate_timestamp(uint32_t i, config_t &config){
-  return static_cast<long long>(i) * static_cast<long long>(1000000000) / (config.frequency * config.default_factor);
+inline long long calculate_timestamp(uint32_t i, const capture_config_t &capture){
+  return static_cast<long long>(i) * static_cast<long long>(1000000000) / capture.sample_rate;
 } 
